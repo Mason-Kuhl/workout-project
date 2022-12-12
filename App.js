@@ -3,10 +3,10 @@ import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, ScrollView, View, TouchableOpacity, Alert, TextInput, RefreshControl, Image, Platform } from 'react-native';
 import {Linking} from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { NavigationContainer, StackActions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { differenceInMinutes, format, formatDuration, parseISO } from 'date-fns';
+import { differenceInMinutes, format, formatDuration, parseISO, set } from 'date-fns';
 import * as SplashScreen from 'expo-splash-screen';
 
 SplashScreen.preventAutoHideAsync();
@@ -52,16 +52,27 @@ function HomeScreen({ navigation }) {
     });
   }
 
+  onView = () => {
+    navigation.navigate('Workouts');
+  }
+
   return (
     <View style={styles.HomeContainer}>
       <Text style={styles.HomeHeader}>Start Tracking Your Workout</Text>
       <View style={styles.StartButtonContainer}>
         <TouchableOpacity 
           style={styles.StartWorkoutBtn}
-          //onPress={this.onStart}
           onPress={onStart}
           >
           <Text style={styles.StartBtnTxt}>Start Workout</Text>
+        </TouchableOpacity>
+      </View>
+      <View style={styles.ViewWorkoutButtonContainer}>
+        <TouchableOpacity
+          style={styles.viewWorkoutBtn}
+          onPress={onView}
+        >
+          <Text style={styles.viewWorkoutBtnTxt}>View Your Workouts</Text>
         </TouchableOpacity>
       </View>
       <View style={styles.HomeImgContainer}>
@@ -87,12 +98,12 @@ function MovesScreen({route, navigation}){
 
   useEffect(() => {
     db.transaction((tx) => {
-      tx.executeSql(
-        "drop table workouts;"
-      );
-      tx.executeSql(
-        "drop table moves;"
-      );
+      // tx.executeSql(
+      //   "drop table workouts;"
+      // );
+      // tx.executeSql(
+      //   "drop table moves;"
+      // );
       tx.executeSql(
         "create table if not exists workouts (id integer primary key not null, date text, startTime text, endTime text null, totalMinutes integer null);"
       );
@@ -137,16 +148,34 @@ function MovesScreen({route, navigation}){
   }
 
   onSaveMove = (moveName) => {
-    db.transaction(
-      (tx) => {
-        tx.executeSql("insert into moves (workoutId, name, sets, reps, difficulty) values (?, ?, ?, ?, ?);", [id[0].id, moveName, sets, reps, difficulty]);
-        tx.executeSql("select * from moves", [], (_, { rows }) =>
-          console.log(rows)
-        );
-      },
-      null,
-    );
-    setName(moveName);
+    if (isNaN(sets) || sets == "") {
+      Alert.alert("Entry Error", "Sets must be a valid integer.");
+      setSets("");
+    } else if (isNaN(reps) || reps == "") {
+      Alert.alert("Entry Error", "Reps must be a valid integer.");
+      setReps("");
+    } else if (isNaN(difficulty) || difficulty == "") {
+      Alert.alert("Entry Error", "Difficulty must be a valid integer.");
+      setDifficulty("");
+    } else if (difficulty < 1 || difficulty > 10) {
+      Alert.alert("Entry Error", "Difficulty must be a valid integer ranged from 1-10.");
+      setDifficulty("");
+    } else {
+      db.transaction(
+        (tx) => {
+          tx.executeSql("insert into moves (workoutId, name, sets, reps, difficulty) values (?, ?, ?, ?, ?);", [id[0].id, moveName, sets, reps, difficulty]);
+          tx.executeSql("select * from moves", [], (_, { rows }) =>
+            console.log(rows)
+          );
+        },
+        null,
+      );
+      Alert.alert("Success", "Move added to your workout.");
+      setName(moveName);
+      setSets("");
+      setReps("");
+      setDifficulty("");
+    }
   }
 
   onEnd = () => {
@@ -340,16 +369,32 @@ function WorkoutDetailsScreen({route, navigation}){
     return null;  
   }
 
+  onHome = () => {
+    navigation.navigate('Home');
+  }
+
   return(
     <View style={styles.workoutDetailsContainer}>
-      {item.map(({ id, name, sets, reps, difficulty }) => (
-        <View style={styles.DetailsContainer}>
-          <Text key={id} style={styles.DetailsName}>{name}</Text>
-          <Text key={id} style={styles.DetailsSets}>{sets}</Text>
-          <Text key={id} style={styles.DetailsReps}>{reps}</Text>
-          <Text key={id} style={styles.DetailsDifficulty}>{difficulty}</Text>
-        </View>
-      ))}
+      <ScrollView>
+        {item.map(({ id, name, sets, reps, difficulty }) => (
+          <View style={styles.DetailsContainer}>
+              <View style={styles.DetailsContent}>
+                <Text key={id} style={styles.DetailsName}>{name}</Text>
+                <Text key={id} style={styles.Details}>Sets: {sets}</Text>
+                <Text key={id} style={styles.Details}>Reps: {reps}</Text>
+                <Text key={id} style={styles.Details}>Difficulty: {difficulty}</Text>
+              </View>
+          </View>
+        ))}
+        <View style={styles.HomeButtonContainer}>
+          <TouchableOpacity
+            style={styles.HomeBtn}
+            onPress={() => onHome()}
+          >
+            <Text style={styles.homeBtnTxt}>Home Page</Text>
+          </TouchableOpacity>
+      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -397,6 +442,22 @@ const styles = StyleSheet.create({
     fontSize: 20,
     paddingTop: 10,
     paddingBottom: 10,
+  },
+  ViewWorkoutButtonContainer: {
+    paddingTop: 10,
+  },
+  viewWorkoutBtn: {
+    backgroundColor: '#1AA7EC',
+    marginLeft: 60,
+    marginRight: 60,
+    borderRadius: 100,
+  },
+  viewWorkoutBtnTxt: {
+    textAlign: 'center',
+    fontWeight: 'bold',
+    fontSize: 15,
+    paddingTop: 5,
+    paddingBottom: 5,
   },
   homeImage: {
     height: 512,
@@ -468,6 +529,35 @@ const styles = StyleSheet.create({
     fontSize: 20,
     paddingTop: 10,
     paddingBottom: 10,
+  },
+  HomeButtonContainer: {
+    paddingTop: 10,
+  },
+  HomeBtn: {
+    backgroundColor: '#1AA7EC',
+    marginLeft: 60,
+    marginRight: 60,
+    borderRadius: 100,
+  },
+  homeBtnTxt: {
+    textAlign: 'center',
+    fontWeight: 'bold',
+    fontSize: 15,
+    paddingTop: 5,
+    paddingBottom: 5,
+  },
+  DetailsName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    paddingTop: 10,
+  },
+  Details: {
+    textAlign: 'center',
+    fontSize: 18,
+  },
+  workoutDetailsContainer: {
+    paddingBottom: 100,
   },
 });
 
